@@ -11,6 +11,12 @@ app.use(express.json());
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 
+//logger
+const log = (type: string, message: string) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [${type}] ${message}`);
+};
+
 const eventBus = new EventEmitter();
 
 // Хранилище для истории (для формирования отчета CSV)
@@ -178,23 +184,25 @@ const startSimulation = () => {
 
 // Обработка команд WebSocket
 wss.on('connection', (ws) => {
+    log('WS', 'New client connected to telemetry stream');
     console.log("🟢 Client connected to Telemetry Stream");
     ws.on('message', (message) => {
         try {
             const cmd = JSON.parse(message.toString());
             if (cmd.type === 'SET_LOAD') {
                 CONFIG.loadMultiplier = cmd.value;
-                console.log(`Load changed to: ${CONFIG.loadMultiplier}x`);
+                log('WS', `Load changed to: ${CONFIG.loadMultiplier}x`);
                 startSimulation();
             }
         } catch (err) {
-            console.error("❌ Failed to parse WS message");
+            log('WS', "❌ Failed to parse WS message");
         }
     });
 });
 
 // --- ЭКСПОРТ CSV С ПОЛНЫМ НАБОРОМ ДАННЫХ ---
 app.get("/api/export", (req, res) => {
+  log('HEALTH', 'Healthcheck requested');
   const headers = "Time,HealthIndex,Speed,Temp,OilPress,Volt,Status\n";
   const rows = telemetryHistory.map(d => {
     const time = new Date(d.timestamp).toLocaleTimeString('ru-RU', { hour12: false });

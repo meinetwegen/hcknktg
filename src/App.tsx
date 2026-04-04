@@ -54,7 +54,7 @@ const App = () => {
   
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'ktz2026') { // Твой пароль
+    if (password === 'ktz2026') { //пароль
       setIsAuthenticated(true);
     } else {
       alert('Доступ запрещен: Неверный код инженера');
