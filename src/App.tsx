@@ -23,13 +23,24 @@ import {
 // --- ТИПЫ ДАННЫХ ---
 interface Telemetry {
   timestamp: number;
-  temp: number;      // Было temp_eng
-  pressure: number;  // Было press_oil
-  voltage: number;   // Было volt_batt
+  // Основные параметры из таблицы
+  temp: number;      // Температура двигателя
+  temp_conv: number; // Температура преобразователя (НОВОЕ)
+  axle_temp: number; // Температура букс (НОВОЕ)
+  pressure: number;  // Давление масла
+  press_tm: number;  // Давление в ТМ (НОВОЕ)
+  conv_curr: number; // Ток нагрузки (НОВОЕ)
+  voltage: number;   // Напряжение
+  speed: number;     // Скорость (velo)
+  
+  // Метаданные
   sys_err: number;
-  speed: number;
   index: number;
   status: string;
+  fuel: number;
+  rpm: number;
+  vibration: number;
+  load: number;
   top_factors: { name: string; impact: number }[];
   location: { x: number };
   latency: number;
@@ -106,9 +117,14 @@ const App = () => {
   const exportToCSV = () => {
     if (history.length === 0) return;
     
-    const headers = "Time,HealthIndex,Speed,Temp,OilPress,Volt,Status\n";
+    // Заголовки согласно таблице
+    const headers = "Time,HealthIndex,Status,Speed,Temp_Eng,Temp_Conv,Temp_Axle,Press_Oil,Press_TM,Current,Volt\n";
+    
     const csvContent = history.map(h => 
-      `${new Date(h.timestamp).toLocaleTimeString()},${h.index},${h.speed.toFixed(1)},${h.temp.toFixed(1)},${h.pressure.toFixed(2)},${h.voltage.toFixed(1)},${h.status}`
+      `${new Date(h.timestamp).toLocaleTimeString()},` +
+      `${h.index},${h.status},${h.speed?.toFixed(1)},${h.temp?.toFixed(1)},` +
+      `${h.temp_conv?.toFixed(1)},${h.axle_temp?.toFixed(1)},${h.pressure?.toFixed(2)},` +
+      `${h.press_tm?.toFixed(2)},${h.conv_curr?.toFixed(0)},${h.voltage?.toFixed(1)}`
     ).join("\n");
     
     const blob = new Blob(["\ufeff" + headers + csvContent], { type: 'text/csv;charset=utf-8;' }); // \ufeff для Excel (поддержка кириллицы)
@@ -130,24 +146,34 @@ const App = () => {
   };
 
   // --- ECHARTS CONFIG ---
-  const chartOptions = useMemo(() => ({
+const chartOptions = useMemo(() => ({
     backgroundColor: 'transparent',
     tooltip: { 
       trigger: 'axis',
       backgroundColor: theme === 'dark' ? '#1a1c2e' : '#fff',
       textStyle: { color: theme === 'dark' ? '#fff' : '#000' }
     },
-    grid: { top: 20, right: 10, bottom: 40, left: 40 },
+    grid: { 
+      top: 10, 
+      right: 5, 
+      bottom: 25, // Уменьшили, чтобы график сидел ниже
+      left: 35, 
+      containLabel: true 
+    },
     xAxis: { 
       type: 'category', 
+      boundaryGap: false, // ГРАФИК БУДЕТ ОТ КРАЯ ДО КРАЯ
       data: history.map(h => new Date(h.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})),
-      axisLabel: { color: '#64748b', fontSize: 9, hideOverlap: true }
+      axisLabel: { color: '#64748b', fontSize: 8, hideOverlap: true, margin: 8 },
+      axisLine: { show: false },
+      axisTick: { show: false }
     },
     yAxis: { 
       type: 'value', 
       min: 0, 
       max: 105, 
-      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } 
+      splitLine: { lineStyle: { color: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' } },
+      axisLabel: { fontSize: 8 }
     },
     dataZoom: [{ type: 'inside' }],
     series: [{
@@ -251,12 +277,12 @@ const App = () => {
       </header>
 
       {/* DASHBOARD */}
-      <main className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col gap-6">
+      <main className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col gap-4">
         
-        <div className="grid grid-cols-12 gap-6 flex-[3] min-h-0">
+        <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
           
           {/* LEFT: HEALTH INDEX (Explainability) */}
-          <div className={`col-span-12 lg:col-span-5 rounded-[2.5rem] p-8 border relative overflow-hidden flex flex-col justify-between transition-all ${
+          <div className={`col-span-12 lg:col-span-5 rounded-[2.5rem] p-6 border relative overflow-hidden flex flex-col justify-between ${
             displayData?.status === 'Критично' ? 'bg-red-500/10 border-red-500/40 shadow-2xl' :
             theme === 'dark' ? 'bg-white/[0.03] border-white/5' : 'bg-white border-slate-200'
           }`}>
@@ -310,12 +336,19 @@ const App = () => {
 
           {/* RIGHT: METRICS & MAP */}
           <div className="col-span-12 lg:col-span-7 flex flex-col gap-6">
-             <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-                <MetricCard theme={theme} label="Velocity" value={displayData?.speed} unit="km/h" icon={<Gauge/>} />
-                <MetricCard theme={theme} label="Eng. Temp" value={displayData?.temp} unit="°C" icon={<Thermometer/>} warn={displayData?.temp && displayData.temp > 90} />
-                <MetricCard theme={theme} label="Oil Press" value={displayData?.pressure} unit="bar" icon={<Wind/>} warn={displayData?.pressure && displayData.pressure < 2.5} />
-                <MetricCard theme={theme} label="Circuit" value={displayData?.voltage} unit="V" icon={<Zap/>} warn={displayData?.voltage && displayData.voltage < 85} />
-             </div>
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              {/* Первая строка: Скорость и Температуры */}
+              <MetricCard theme={theme} label="Velocity" value={displayData?.speed} unit="km/h" icon={<Gauge/>} warn={displayData?.speed > 100} />
+              <MetricCard theme={theme} label="Eng. Temp" value={displayData?.temp} unit="°C" icon={<Thermometer/>} warn={displayData?.temp > 120} />
+              <MetricCard theme={theme} label="Conv. Temp" value={displayData?.temp_conv} unit="°C" icon={<Thermometer/>} warn={displayData?.temp_conv > 90} />
+              <MetricCard theme={theme} label="Axle Temp" value={displayData?.axle_temp} unit="°C" icon={<Thermometer/>} warn={displayData?.axle_temp > 70} />
+
+              {/* Вторая строка: Давление и Электрика */}
+              <MetricCard theme={theme} label="Oil Press" value={displayData?.pressure} unit="bar" icon={<Wind/>} warn={displayData?.pressure < 2.1} />
+              <MetricCard theme={theme} label="TM Press" value={displayData?.press_tm} unit="bar" icon={<ShieldCheck/>} warn={displayData?.press_tm < 4.8} />
+              <MetricCard theme={theme} label="Load Curr" value={displayData?.conv_curr} unit="A" icon={<Zap/>} warn={displayData?.conv_curr > 1200} />
+              <MetricCard theme={theme} label="Circuit" value={displayData?.voltage} unit="V" icon={<Zap/>} warn={displayData?.voltage < 85} />
+            </div>
 
              {/* MAP / ROUTE */}
              <div className={`flex-1 rounded-[2.5rem] border p-8 relative overflow-hidden transition-all ${
@@ -365,43 +398,53 @@ const App = () => {
         </div>
 
         {/* BOTTOM: GRAPH & REPLAY */}
-        <div className={`h-64 rounded-[2.5rem] border p-6 flex flex-col transition-all ${
-          theme === 'dark' ? 'bg-white/[0.03] border-white/5' : 'bg-white border-slate-200'
+        <div className={`h-40 shrink-0 rounded-[2rem] border p-4 flex flex-col transition-all ${
+          theme === 'dark' ? 'bg-white/[0.02] border-white/5' : 'bg-white border-slate-200 shadow-sm'
         }`}>
-          <div className="flex justify-between items-center mb-4 px-2">
-             <div className="flex items-center gap-6 flex-1">
-               <span className="text-[10px] font-black uppercase tracking-widest opacity-30 flex items-center gap-2 shrink-0">
-                 <History size={14}/> Replay & Trends
-               </span>
-               <div className="flex items-center gap-4 flex-1 max-w-xl">
-                 <Clock size={14} className={replayIndex !== null ? 'text-amber-500' : 'opacity-20'} />
-                 <input 
-                    type="range" 
-                    min="0" 
-                    max={Math.max(0, history.length - 1)} 
-                    value={replayIndex ?? history.length - 1}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      setReplayIndex(val === history.length - 1 ? null : val);
-                    }}
-                    className="flex-1 h-1.5 bg-blue-500/20 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                 />
-                 <span className="text-[10px] font-mono opacity-40 w-16 text-right shrink-0">
-                   {replayIndex !== null ? `HIST: -${history.length - 1 - replayIndex}s` : 'LIVE FEED'}
-                 </span>
-               </div>
-             </div>
-             
-             <button onClick={exportToCSV} className="text-[10px] font-black flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl transition-all">
-               <Download size={14}/> GENERATE REPORT
-             </button>
+          <div className="flex justify-between items-center mb-2 px-2 shrink-0 relative z-20">
+            <div className="flex items-center gap-6 flex-1">
+              {/* Заголовок */}
+              <span className="text-[9px] font-black uppercase tracking-widest opacity-30 flex items-center gap-2 shrink-0">
+                <History size={14}/> Replay & Trends
+              </span>
+
+              {/* Контроллер истории */}
+              <div className="flex items-center gap-4 flex-1 max-w-xl">
+                <Clock size={14} className={replayIndex !== null ? 'text-amber-500' : 'opacity-20'} />
+                <input 
+                  type="range" 
+                  min="0" 
+                  max={Math.max(0, history.length - 1)} 
+                  value={replayIndex ?? history.length - 1}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setReplayIndex(val === history.length - 1 ? null : val);
+                  }}
+                  className="flex-1 h-1 bg-blue-500/20 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <span className="text-[9px] font-mono opacity-40 w-16 text-right shrink-0">
+                  {replayIndex !== null ? `HIST: -${history.length - 1 - replayIndex}s` : 'LIVE FEED'}
+                </span>
+              </div>
+        </div>
+        
+        {/* Кнопка экспорта */}
+            <button 
+              onClick={exportToCSV} 
+              className="text-[9px] font-black flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 active:scale-95 rounded-lg transition-all shrink-0 ml-4 pointer-events-auto"
+            >
+              <Download size={12}/> REPORT
+            </button>
           </div>
 
-          <div className="flex-1 min-h-0">
-             <ReactECharts option={chartOptions} style={{height: '100%'}} />
+          {/* Контейнер графика */}
+          <div className="flex-1 min-h-0 w-full">
+            <ReactECharts 
+              option={chartOptions} 
+              style={{height: '100%', width: '100%'}} 
+            />
           </div>
         </div>
-
       </main>
 
       <footer className="h-10 border-t flex items-center justify-between px-8 text-[9px] font-black uppercase tracking-[0.4em] opacity-30 shrink-0">
