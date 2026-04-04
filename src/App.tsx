@@ -16,7 +16,8 @@ import {
   History,
   AlertOctagon,
   Clock,
-  TrendingDown
+  TrendingDown,
+  Lock
 } from 'lucide-react';
 
 // --- ТИПЫ ДАННЫХ ---
@@ -36,6 +37,8 @@ interface Telemetry {
 }
 
 const App = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
   const [data, setData] = useState<Telemetry | null>(null);
   const [history, setHistory] = useState<Telemetry[]>([]);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -48,6 +51,15 @@ const App = () => {
 
   // Текущее состояние
   const displayData = replayIndex !== null ? history[replayIndex] : data;
+  
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === 'ktz2026') { // Твой пароль
+      setIsAuthenticated(true);
+    } else {
+      alert('Доступ запрещен: Неверный код инженера');
+    }
+  };
 
   // --- WEBSOCKET & REALTIME LOGIC ---
   const connect = () => {
@@ -153,6 +165,39 @@ const App = () => {
       }
     }]
   }), [history, theme]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="fixed inset-0 bg-slate-950 flex items-center justify-center z-[9999]">
+        <div className="p-8 bg-white/5 border border-white/10 rounded-[2rem] backdrop-blur-md w-full max-w-md text-center">
+          <div className="w-16 h-16 bg-blue-500/20 text-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Lock size={32} />
+          </div>
+          <h1 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter italic">
+            KTZ Digital Twin
+          </h1>
+          <p className="text-slate-400 text-sm mb-8">Система мониторинга защищена. Введите ключ доступа.</p>
+          
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••"
+              className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white text-center text-xl tracking-[0.5em] focus:outline-none focus:border-blue-500 transition-all"
+              autoFocus
+            />
+            <button 
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all uppercase italic tracking-widest"
+            >
+              Войти в систему
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`h-screen w-screen overflow-hidden flex flex-col transition-all duration-300 ${

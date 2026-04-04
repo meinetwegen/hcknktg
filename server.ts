@@ -29,9 +29,9 @@ interface TelemetryData {
 // --- ДИНАМИЧЕСКАЯ КОНФИГУРАЦИЯ ---
 let CONFIG = {
   thresholds: {
-    temp: { warn: 90, crit: 100, weight: 0.35 },
-    press: { warn: 2.5, crit: 2.0, weight: 0.40 },
-    volt: { warn: 90, crit: 80, weight: 0.25 }
+    temp: { warn: 120, crit: 145, weight: 0.35 },
+    press: { warn: 3.0, crit: 2.0, weight: 0.40 },
+    volt: { warn: 95, crit: 80, weight: 0.25 }
   },
   loadMultiplier: 1 
 };
@@ -44,13 +44,15 @@ const calculateHealth = (raw: TelemetryData) => {
 
   // 1. Температура (35%)
   if (raw.temp >= CONFIG.thresholds.temp.crit) {
-    const p = Math.round(CONFIG.thresholds.temp.weight * 100);
+    const p = Math.round(CONFIG.thresholds.temp.weight * 100); // 35%
     penalty += p;
     factors.push({ name: "Критический перегрев", impact: p });
     recommendations.push("ЭКСТРЕННО: Снизить тягу, активировать доп. охлаждение.");
   } else if (raw.temp >= CONFIG.thresholds.temp.warn) {
-    penalty += 15;
-    factors.push({ name: "Повышенная температура", impact: 15 });
+    // Делаем штраф 21%, чтобы статус гарантированно стал "Внимание" (100 - 21 = 79)
+    const p = 21; 
+    penalty += p;
+    factors.push({ name: "Повышенная температура", impact: p });
     recommendations.push("ВНИМАНИЕ: Контроль теплового режима двигателя.");
   }
 
@@ -165,7 +167,7 @@ const startSimulation = () => {
       temp: currentTemp,
       pressure: Math.max(0.4, currentPress),
       sys_err: (isFailing && failCounter < 10) ? 1 : 0, // Ошибка ПО появляется не сразу
-      voltage: 108 + (Math.random() * 5),
+      voltage: 108 + (Math.random() * 4),
       current: 240 + (Math.random() * 40),
       speed: isFailing ? 45 : 92 + (Math.random() * 2),
     };
