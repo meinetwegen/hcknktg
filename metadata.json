@@ -1,0 +1,7 @@
+{
+  "name": "EL-2501 Route Navigator",
+  "description": "High-performance locomotive telemetry and route navigation dashboard.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
