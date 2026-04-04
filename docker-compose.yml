@@ -1,0 +1,10 @@
+services:
+  ktz-app:
+    build: .
+    container_name: ktz-digital-twin
+    ports:
+      - "3000:3000"
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
